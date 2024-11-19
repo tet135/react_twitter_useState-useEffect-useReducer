@@ -1,49 +1,93 @@
-import { Fragment, useState } from "react";
+import {
+  Fragment,
+  useState,
+  useEffect,
+  useReducer,
+} from 'react'
 
-import "./index.css";
+import './index.css'
 
-import Grid from "../../component/grid";
-import Box from "../../component/box";
-import PostContent from "../../component/post-content";
+import Grid from '../../component/grid'
+import Box from '../../component/box'
+import PostContent from '../../component/post-content'
 
-import PostCreate from "../post-create";
-import { LOAD_STATUS, Skeleton, Alert } from "../../component/load";
+import PostCreate from '../post-create'
+import {
+  LOAD_STATUS,
+  Skeleton,
+  Alert,
+} from '../../component/load'
 
-import { getDate } from "../../util/getDate";
+import {
+  REQUEST_ACTION_TYPE,
+  requestInitialState,
+  requestReducer,
+} from '../../util/request'
 
-export default function Container({ id, username, text, date }) {
+import { getDate } from '../../util/getDate'
+
+export default function Container({
+  id,
+  username,
+  text,
+  date,
+}) {
+  const [state, dispatch] = useReducer(
+    requestReducer,
+    requestInitialState,
+    //функція init отримує дані з props
+    (state) => ({
+      ...state,
+      data: {
+        id,
+        username,
+        text,
+        date,
+        reply: null,
+      },
+    }),
+  )
+
   //data - щоб тримати дані з сервера
-  const [data, setData] = useState({
-    id,
-    username,
-    text,
-    date,
-    reply: null,
-  });
+  // const [data, setData] = useState()
 
-  const [status, setStatus] = useState(null);
-  const [message, setMessage] = useState("");
+  // const [status, setStatus] = useState(null)
+  // const [message, setMessage] = useState('')
 
   const getData = async () => {
-    setStatus(LOAD_STATUS.PROGRESS);
+    dispatch({ type: REQUEST_ACTION_TYPE.PROGRESS })
     try {
       //in GET requests we can ignore method: "GET" and configurative data
-      const res = await fetch(`http://localhost:4000/post-item?id=${data.id}`);
+      const res = await fetch(
+        `http://localhost:4000/post-item?id=${state.data.id}`,
+      )
 
-      const resData = await res.json();
+      const resData = await res.json()
 
       if (res.ok) {
-        setData(convertData(resData));
-        setStatus(LOAD_STATUS.SUCCESS);
+        dispatch({
+          type: REQUEST_ACTION_TYPE.SUCCESS,
+          payload: convertData(resData),
+        })
+        // setData(convertData(resData))
+        // setStatus(LOAD_STATUS.SUCCESS)
       } else {
-        setMessage(resData.message);
-        setStatus(LOAD_STATUS.ERROR);
+        dispatch({
+          type: REQUEST_ACTION_TYPE.ERROR,
+          payload: resData.message,
+        })
+        // setMessage(resData.message)
+        // setStatus(LOAD_STATUS.ERROR)
       }
     } catch (error) {
-      setMessage(error.message);
-      setStatus(LOAD_STATUS.ERROR);
+      dispatch({
+        type: REQUEST_ACTION_TYPE.ERROR,
+        payload: error.message,
+      })
+      // setMessage(error.message)
+      // setStatus(LOAD_STATUS.ERROR)
     }
-  };
+  }
 
   //raw (все, що приходить в data) деструктуризуэться як {post}
   const convertData = ({ post }) => ({
@@ -52,54 +96,60 @@ export default function Container({ id, username, text, date }) {
     text: post.text,
     date: getDate(post.date),
 
-    reply: post.reply.reverse().map(({ id, username, text, date }) => ({
-      id,
-      username,
-      text,
-      date: getDate(date),
-    })),
+    reply: post.reply
+      .reverse()
+      .map(({ id, username, text, date }) => ({
+        id,
+        username,
+        text,
+        date: getDate(date),
+      })),
 
     isEmpty: post.reply.length === 0,
-  });
+  })
 
-  const [isOpen, setOpen] = useState(false);
+  const [isOpen, setOpen] = useState(false)
 
   const handleOpen = () => {
-    if (status === null) {
-      getData();
+    setOpen(!isOpen)
+  }
+
+  useEffect(() => {
+    // alert(isOpen)
+    if (isOpen === true) {
+      getData()
     }
-    setOpen(!isOpen);
-  };
+  }, [isOpen])
 
   return (
-    <Box style={{ padding: "0" }}>
+    <Box style={{ padding: '0' }}>
       <div
         style={{
-          padding: "20px",
-          cursor: "pointer",
+          padding: '20px',
+          cursor: 'pointer',
         }}
         onClick={handleOpen}
       >
         <PostContent
-          username={data.username}
-          date={data.date}
-          text={data.text}
+          username={state.data.username}
+          date={state.data.date}
+          text={state.data.text}
         />
       </div>
 
       {isOpen && (
-        <div style={{ padding: "0 20px 20px 20px" }}>
+        <div style={{ padding: '0 20px 20px 20px' }}>
           <Grid>
             <Box>
               <PostCreate
                 placeholder="Post your reply!"
                 button="Reply"
-                id={data.id}
+                id={state.data.id}
                 onCreate={getData}
               />
             </Box>
 
-            {status === LOAD_STATUS.PROGRESS && (
+            {state.status === LOAD_STATUS.PROGRESS && (
               <Fragment>
                 <Box>
                   <Skeleton />
@@ -110,13 +160,16 @@ export default function Container({ id, username, text, date }) {
               </Fragment>
             )}
 
-            {status === LOAD_STATUS.ERROR && (
-              <Alert message={message} status={status} />
+            {state.status === LOAD_STATUS.ERROR && (
+              <Alert
+                message={state.message}
+                status={state.status}
+              />
             )}
 
-            {status === LOAD_STATUS.SUCCESS &&
-              data.isEmpty === false &&
-              data.reply.map((item) => (
+            {state.status === LOAD_STATUS.SUCCESS &&
+              state.data.isEmpty === false &&
+              state.data.reply.map((item) => (
                 <Fragment key={item.id}>
                   <Box>
                     <PostContent {...item} />
@@ -127,5 +180,5 @@ export default function Container({ id, username, text, date }) {
         </div>
       )}
     </Box>
-  );
+  )
 }

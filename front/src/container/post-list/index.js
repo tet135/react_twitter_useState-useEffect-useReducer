@@ -1,68 +1,128 @@
-import { useState, Fragment } from "react";
+import {
+  useState,
+  useEffect,
+  useReducer,
+  Fragment,
+} from 'react'
 
-import Grid from "../../component/grid";
-import Box from "../../component/box";
-import Title from "../../component/title";
+import Grid from '../../component/grid'
+import Box from '../../component/box'
+import Title from '../../component/title'
 
-import PostItem from "../post-item";
-import PostCreate from "../post-create";
+import PostItem from '../post-item'
+import PostCreate from '../post-create'
 
-import { Alert, LOAD_STATUS, Skeleton } from "../../component/load";
+import { useWindowListener } from '../../util/useWindowListener'
 
-import { getDate } from "../../util/getDate";
+import {
+  Alert,
+  LOAD_STATUS,
+  Skeleton,
+} from '../../component/load'
+
+import { getDate } from '../../util/getDate'
+import {
+  REQUEST_ACTION_TYPE,
+  requestInitialState,
+  requestReducer,
+} from '../../util/request'
 
 export default function Container() {
-  const [status, setStatus] = useState(null);
-  const [message, setMessage] = useState("");
-  //data- щоб тримати дані з сервера
-  const [data, setData] = useState(null);
+  const [state, dispatch] = useReducer(
+    requestReducer,
+    requestInitialState,
+  )
+
+  // const [status, setStatus] = useState(null)
+  // const [message, setMessage] = useState('')
+  // //data- щоб тримати дані з сервера
+  // const [data, setData] = useState(null)
 
   const getData = async () => {
-    setStatus(LOAD_STATUS.PROGRESS);
+    dispatch({ type: REQUEST_ACTION_TYPE.PROGRESS })
 
     // тут функціонал для отримання списка постів
     try {
       const res = await fetch(
-        "http://localhost:4000/post-list",
+        'http://localhost:4000/post-list',
         //method: "GET" можна не писати, бо за замовчуванням всякий метод GET
         {
-          method: "GET",
-        }
-      );
+          method: 'GET',
+        },
+      )
 
-      const data = await res.json();
+      const data = await res.json()
 
       if (res.ok) {
-        setData(convertData(data));
-        setStatus(LOAD_STATUS.SUCCESS);
+        dispatch({
+          type: REQUEST_ACTION_TYPE.SUCCESS,
+          payload: convertData(data),
+        })
       } else {
-        setMessage(data.message);
-        setStatus(LOAD_STATUS.ERROR);
+        dispatch({
+          type: REQUEST_ACTION_TYPE.ERROR,
+          payload: data.message,
+        })
       }
     } catch (error) {
-      setMessage(error.message);
-      setStatus(LOAD_STATUS.ERROR);
+      dispatch({
+        type: REQUEST_ACTION_TYPE.ERROR,
+        payload: error.message,
+      })
     }
-  };
+  }
 
   const convertData = (raw) => ({
-    list: raw.list.reverse().map(({ id, username, text, date }) => ({
-      id,
-      username,
-      text,
-      date: getDate(date),
-    })),
+    list: raw.list
+      .reverse()
+      .map(({ id, username, text, date }) => ({
+        id,
+        username,
+        text,
+        date: getDate(date),
+      })),
 
     isEmpty: raw.list.length === 0,
-  });
+  })
 
-  if (status === null) {
-    getData();
-  }
+  //класичне використання useEffect для разового завантаження даних з сервера
+  useEffect(() => {
+    // alert('render useEffect')
+    getData()
+    const intervalId = setInterval(() => getData(), 5000)
+
+    //setInterval -  JS code, so we need to clearInterval(intervalId) to stop repeating setInterval after unmounting of component
+    return () => {
+      clearInterval(intervalId)
+    }
+  }, [])
+
+  const [coordinates, setCoordinates] = useState({
+    x: 0,
+    y: 0,
+  })
+
+  useWindowListener('pointermove', (event) => {
+    setCoordinates({ x: event.clientX, y: event.clientY })
+  })
 
   return (
     <Grid>
       {/* //це створення нового поста */}
+      <div
+        style={{
+          position: 'absolute',
+          backgroundColor: 'pink',
+          opacity: 0.6,
+          width: 40,
+          height: 40,
+          borderRadius: '50%',
+          top: -20,
+          left: -20,
+          pointerEvents: 'none',
+          transform: `translate(${coordinates.x}px, ${coordinates.y}px)`,
+        }}
+      ></div>
       <Box>
         <Grid>
           <Title>Home</Title>
@@ -77,7 +137,7 @@ export default function Container() {
       </Box>
 
       {/* //тут будуть виводитись пости */}
-      {status === LOAD_STATUS.PROGRESS && (
+      {state.status === LOAD_STATUS.PROGRESS && (
         <Fragment>
           <Box>
             <Skeleton />
@@ -88,16 +148,19 @@ export default function Container() {
         </Fragment>
       )}
 
-      {status === LOAD_STATUS.ERROR && (
-        <Alert status={status} message={message} />
+      {state.status === LOAD_STATUS.ERROR && (
+        <Alert
+          status={state.status}
+          message={state.message}
+        />
       )}
 
-      {status === LOAD_STATUS.SUCCESS && (
+      {state.status === LOAD_STATUS.SUCCESS && (
         <Fragment>
-          {data.isEmpty ? (
+          {state.data.isEmpty ? (
             <Alert message="Список постів порожній" />
           ) : (
-            data.list.map((item) => (
+            state.data.list.map((item) => (
               <Fragment key={item.id}>
                 {/* //item = id, username, text, date */}
                 <PostItem {...item} />
@@ -107,5 +170,5 @@ export default function Container() {
         </Fragment>
       )}
     </Grid>
-  );
+  )
 }
